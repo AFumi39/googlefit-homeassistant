@@ -722,12 +722,17 @@ class GoogleFitSleepSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return const.TIME_SECONDS
+        return const.TIME_MINUTES
 
     @property
     def icon(self):
         """Return the icon."""
         return 'mdi:bed-clock'
+
+    @property
+    def device_class(self):
+        """Return the type of sensor."""
+        return "duration"
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -763,10 +768,10 @@ class GoogleFitSleepSensor(GoogleFitSensor):
                 elif current_segment_sleep_type == 6: #REM
                     total_rem += current_segment_duration_sec
                 
-            state_dict = dict({'bed_timestamp': str(bed_timestamp), 'wakeup_timestamp': str(wakeup_timestamp), 'total_sleep': total_sleep,
-                        'total_awake': total_awake, 'total_sleeping': total_sleeping, 'total_outofbed': total_outofbed,
-                        'total_light_sleep': total_light, 'total_deep_sleep': total_deep, 'total_rem': total_rem})
-            self._state = total_sleep
+            state_dict = dict({'bed_timestamp': str(bed_timestamp), 'wakeup_timestamp': str(wakeup_timestamp), 'total_sleep_seconds': total_sleep,
+                        'total_awake_seconds': total_awake, 'total_sleeping_seconds': total_sleeping, 'total_outofbed_seconds': total_outofbed,
+                        'total_light_sleep_seconds': total_light, 'total_deep_sleep_seconds': total_deep, 'total_rem_seconds': total_rem})
+            self._state = total_sleep / 60
             self._attributes = state_dict
             self._last_updated = time.time()
 
