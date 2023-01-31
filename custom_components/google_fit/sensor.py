@@ -214,21 +214,23 @@ def setup_platform(hass, config, add_devices, discovery_info=None):
     token_file = hass.config.path(TOKEN_FILE)
     client = _get_client(token_file)
     name = config.get(const.CONF_NAME)
-    add_devices([GoogleFitWeightSensor(client, name),
-                 GoogleFitHeartRateSensor(client, name),
-                 GoogleFitRestingHeartRateSensor(client, name),
-                 GoogleFitHeightSensor(client, name),
-                 GoogleFitStepsSensor(client, name),
-                 GoogleFitSleepSensor(client, name),
-                 GoogleFitMoveTimeSensor(client, name),
-                 GoogleFitCaloriesSensor(client, name),
-                 GoogleFitOxygenSensor(client, name),
-                 GoogleFitBloodPresureSysSensor(client, name),
-                 GoogleFitBloodPresureDiaSensor(client, name),
-                 GoogleFitNutritionSensor(client, name),
-                 GoogleFitHydratationSensor(client, name),
-                 GoogleFitBMRSensor(client, name),
-                 GoogleFitDistanceSensor(client, name)], True)
+    #clientID = config[CONF_CLIENT_ID]
+    clientID = ""
+    add_devices([GoogleFitWeightSensor(client, name, clientID),
+                 GoogleFitHeartRateSensor(client, name, clientID),
+                 GoogleFitRestingHeartRateSensor(client, name, clientID),
+                 GoogleFitHeightSensor(client, name, clientID),
+                 GoogleFitStepsSensor(client, name, clientID),
+                 GoogleFitSleepSensor(client, name, clientID),
+                 GoogleFitMoveTimeSensor(client, name, clientID),
+                 GoogleFitCaloriesSensor(client, name, clientID),
+                 GoogleFitOxygenSensor(client, name, clientID),
+                 GoogleFitBloodPresureSysSensor(client, name, clientID),
+                 GoogleFitBloodPresureDiaSensor(client, name, clientID),
+                 GoogleFitNutritionSensor(client, name, clientID),
+                 GoogleFitHydratationSensor(client, name, clientID),
+                 GoogleFitBMRSensor(client, name, clientID),
+                 GoogleFitDistanceSensor(client, name, clientID)], True)
 
 
 class GoogleFitSensor(entity.Entity):
@@ -238,7 +240,7 @@ class GoogleFitSensor(entity.Entity):
     However, the sensor it is designed to be extensible for other measures.
     """
 
-    def __init__(self, client, name):
+    def __init__(self, client, name, clientID):
         """Initializes the sensor.
 
         token_file: str, File path for API token.
@@ -250,6 +252,7 @@ class GoogleFitSensor(entity.Entity):
 
         # Device name.
         self._name = name
+        self._clientId = clientID
         self._state = const.STATE_UNKNOWN
         self._last_updated = const.STATE_UNKNOWN
 
@@ -331,6 +334,11 @@ class GoogleFitSensor(entity.Entity):
             datasets(). \
             get(userId=API_USER_ID, dataSourceId=source, datasetId=dataset). \
             execute()
+
+    @property 
+    def unique_id(self) -> str: 
+        """Return a unique, Home Assistant friendly identifier for this entity.""" 
+        return SENSOR + SENSOR_NAME.format(self._name, self._name_suffix) + self._clientId
 
 
 class GoogleFitWeightSensor(GoogleFitSensor):
@@ -579,7 +587,7 @@ class GoogleFitStepsSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return STEPS
+        return "steps"
 
     @property
     def icon(self):
@@ -613,7 +621,7 @@ class GoogleFitMoveTimeSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return 'min'
+        return const.TIME_MINUTES
 
     @property
     def icon(self):
@@ -704,8 +712,7 @@ class GoogleFitDistanceSensor(GoogleFitSensor):
 class GoogleFitSleepSensor(GoogleFitSensor):
     # DATA_SOURCE = "derived:com.google.step_count.delta:" \
     #               "com.google.android.gms:estimated_steps"
-    DATA_SOURCE = "derived:com.google.sleep.segment:" \
-                  "com.google.android.gms:merged"
+    DATA_SOURCE = "derived:com.google.sleep.segment:com.google.android.gms:merged"
 
     @property
     def _name_suffix(self):
@@ -739,7 +746,7 @@ class GoogleFitSleepSensor(GoogleFitSensor):
             total_rem = 0
             for point in sleep_ds["point"]:
                 current_segment_sleep_type = int(point["value"][0]["intVal"])
-                current_segment_duration_sec = (int(point["endTimeNanos"]) / 1000000000) - (int(point["endTimeNanos"]) / 1000000000)
+                current_segment_duration_sec = (int(point["endTimeNanos"]) / 1000000000) - (int(point["startTimeNanos"]) / 1000000000)
                 total_sleep += current_segment_duration_sec
 
                 #Check sleep type according to https://developers.google.com/fit/scenarios/read-sleep-data
@@ -756,7 +763,7 @@ class GoogleFitSleepSensor(GoogleFitSensor):
                 elif current_segment_sleep_type == 6: #REM
                     total_rem += current_segment_duration_sec
                 
-            state_dict = dict({'bed_timestamp': bed_timestamp, 'wakeup_timestamp': wakeup_timestamp, 'total_sleep': total_sleep,
+            state_dict = dict({'bed_timestamp': str(bed_timestamp), 'wakeup_timestamp': str(wakeup_timestamp), 'total_sleep': total_sleep,
                         'total_awake': total_awake, 'total_sleeping': total_sleeping, 'total_outofbed': total_outofbed,
                         'total_light_sleep': total_light, 'total_deep_sleep': total_deep, 'total_rem': total_rem})
             self._state = total_sleep
@@ -824,7 +831,7 @@ class GoogleFitOxygenSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return "%"
+        return const.PERCENTAGE
 
     @property
     def icon(self):
@@ -950,7 +957,7 @@ class GoogleFitNutritionSensor(GoogleFitSensor):
                     if item["key"] == "calories":
                         calories += item["value"]["fpVal"]
 
-        self._state = calories
+        self._state = round(calories)
         self._attributes = state
         self._last_updated = time.time()
 
@@ -998,7 +1005,7 @@ class GoogleFitBMRSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return "cal"
+        return "kcal"
 
     @property
     def icon(self):
