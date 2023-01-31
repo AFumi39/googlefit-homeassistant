@@ -283,11 +283,12 @@ class GoogleFitSensor(entity.Entity):
     @property
     def state_attributes(self):
         """Returns the state attributes. """
-        return {
+        d = dict({
             const.ATTR_FRIENDLY_NAME: self.name,
             const.ATTR_UNIT_OF_MEASUREMENT: self.unit_of_measurement,
             ATTR_LAST_UPDATED: self.last_updated,
-        }
+        })
+        return d | self._attributes
 
     @property
     def device_state_attributes(self):
@@ -530,20 +531,29 @@ class GoogleFitRestingHeartRateSensor(GoogleFitSensor):
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        heartrate_datasources = self._get_dataset(self.DATA_SOURCE)
+        heartrate_datasources = self._get_datasources('com.google.heart_rate.bpm')
 
         heart_datapoints = {}
-        for datapoint in heartrate_datasources["point"]:
-            point_value = datapoint['value']
-            if not point_value:
-                continue
-            heartrate = point_value[0]['fpVal']
-            if not heartrate:
-                continue
-            last_update_milis = int(datapoint['modifiedTimeMillis'])
-            if not last_update_milis:
-                continue
-            heart_datapoints[last_update_milis] = heartrate
+        for datasource in heartrate_datasources:
+            datasource_id = datasource.get('dataStreamId')
+            heart_request = self._client.users().dataSources(). \
+                dataPointChanges().list(
+                userId=API_USER_ID,
+                dataSourceId=datasource_id,
+            )
+            heart_data = heart_request.execute()
+            heart_inserted_datapoints = heart_data.get('insertedDataPoint')
+            for datapoint in heart_inserted_datapoints:
+                point_value = datapoint.get('value')
+                if not point_value:
+                    continue
+                heartrate = point_value[0].get('fpVal')
+                if not heartrate:
+                    continue
+                last_update_milis = int(datapoint.get('modifiedTimeMillis', 0))
+                if not last_update_milis:
+                    continue
+                heart_datapoints[last_update_milis] = heartrate
 
         if heart_datapoints:
             time_updates = list(heart_datapoints.keys())
@@ -574,7 +584,7 @@ class GoogleFitStepsSensor(GoogleFitSensor):
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:walk'
+        return 'mdi:shoe-print'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -608,7 +618,7 @@ class GoogleFitMoveTimeSensor(GoogleFitSensor):
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:clock-outline'
+        return 'mdi:car-clock'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -626,7 +636,8 @@ class GoogleFitMoveTimeSensor(GoogleFitSensor):
 
 
 class GoogleFitCaloriesSensor(GoogleFitSensor):
-    DATA_SOURCE = "derived:com.google.calories.expended:com.google.android.gms:merge_calories_expended"
+    DATA_SOURCE = "derived:com.google.calories.expended:" \
+                  "com.google.android.gms:merge_calories_expended"
 
     @property
     def _name_suffix(self):
@@ -636,19 +647,20 @@ class GoogleFitCaloriesSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return 'cal'
+        return "kcal"
 
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:food'
+        return 'mdi:weight-lifter'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
         values = []
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
-            values.append(point['value'][0]['fpVal'])
+            if int(point["startTimeNanos"]) > _today_dataset_start():
+                values.append(point['value'][0]['fpVal'])
 
         self._last_updated = time.time()
         self._state = round(sum(values))
@@ -690,8 +702,10 @@ class GoogleFitDistanceSensor(GoogleFitSensor):
 
 
 class GoogleFitSleepSensor(GoogleFitSensor):
-    DATA_SOURCE = "derived:com.google.step_count.delta:" \
-                  "com.google.android.gms:estimated_steps"
+    # DATA_SOURCE = "derived:com.google.step_count.delta:" \
+    #               "com.google.android.gms:estimated_steps"
+    DATA_SOURCE = "derived:com.google.sleep.segment:" \
+                  "com.google.android.gms:merged"
 
     @property
     def _name_suffix(self):
@@ -701,60 +715,102 @@ class GoogleFitSleepSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return ' hours'
+        return const.TIME_SECONDS
 
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:clock'
+        return 'mdi:bed-clock'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
 
-        yesterday = datetime.now().replace(hour=17, minute=0, second=0, microsecond=0)
-        yesterday = yesterday - timedelta(days=1)
-        starttime = yesterday.isoformat("T") + "Z"
-        today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
-        endtime = today.isoformat("T") + "Z"
-        _LOGGER.debug("Starttime %s, Endtime %s", starttime, endtime)
-        sleep_dataset = self._client.users().sessions().list(userId='me', fields='session', startTime=starttime,
-                                                             endTime=endtime).execute()
-        starts = []
-        ends = []
-        deep_sleep = []
-        light_sleep = []
-        _LOGGER.debug("Sleep dataset %s", sleep_dataset)
-        starttime
-        for point in sleep_dataset["session"]:
-            if int(point["activityType"]) == 72:
-                starts.append(int(point["startTimeMillis"]))
-                ends.append(int(point["endTimeMillis"]))
-                if point["name"].startswith('Deep'):
-                    deep_sleep_start = datetime.fromtimestamp(int(point["startTimeMillis"]) / 1000)
-                    deep_sleep_end = datetime.fromtimestamp(int(point["endTimeMillis"]) / 1000)
-                    _LOGGER.debug("Deep Sleep dataset Total %s", (deep_sleep_end - deep_sleep_start))
-                    deep_sleep.append(deep_sleep_end - deep_sleep_start)
-                elif point["name"].startswith('Light'):
-                    light_sleep_start = datetime.fromtimestamp(int(point["startTimeMillis"]) / 1000)
-                    light_sleep_end = datetime.fromtimestamp(int(point["endTimeMillis"]) / 1000)
-                    _LOGGER.debug("Light Sleep dataset Total %s", (light_sleep_end - light_sleep_start))
-                    light_sleep.append(light_sleep_end - light_sleep_start)
-        if len(starts) != 0 or len(ends) != 0:
-            bed_time = datetime.fromtimestamp(round(min(starts) / 1000))
-            wake_up_time = datetime.fromtimestamp(round(max(ends) / 1000))
-            total_sleep = wake_up_time - bed_time
-            total_deep_sleep = sum(deep_sleep, timedelta())
-            total_light_sleep = sum(light_sleep, timedelta())
-            state_dict = dict({'bed_time': str(bed_time), 'wake_up_time': str(wake_up_time), 'sleep': str(total_sleep),
-                               'deep_sleep': str(total_deep_sleep), 'light_sleep': str(total_light_sleep)})
-            self._state = str(total_sleep)
+        sleep_ds = self._get_dataset(self.DATA_SOURCE)
+        if len(sleep_ds["point"]) > 0:
+            bed_timestamp = int(sleep_ds["minStartTimeNs"]) / 1000000000
+            wakeup_timestamp = int(sleep_ds["maxEndTimeNs"]) / 1000000000
+            total_sleep = 0
+            total_awake = 0
+            total_sleeping = 0
+            total_outofbed = 0
+            total_light = 0
+            total_deep = 0
+            total_rem = 0
+            for point in sleep_ds["point"]:
+                current_segment_sleep_type = int(point["value"][0]["intVal"])
+                current_segment_duration_sec = (int(point["endTimeNanos"]) / 1000000000) - (int(point["endTimeNanos"]) / 1000000000)
+                total_sleep += current_segment_duration_sec
+
+                #Check sleep type according to https://developers.google.com/fit/scenarios/read-sleep-data
+                if current_segment_sleep_type == 1: #Awake during sleep
+                    total_awake += current_segment_duration_sec
+                elif current_segment_sleep_type == 2: #Sleep
+                    total_sleeping += current_segment_duration_sec
+                elif current_segment_sleep_type == 3: #Out-of-bed
+                    total_outofbed += current_segment_duration_sec
+                elif current_segment_sleep_type == 4: #Light sleep
+                    total_light += current_segment_duration_sec
+                elif current_segment_sleep_type == 5: #Deep sleep
+                    total_deep += current_segment_duration_sec
+                elif current_segment_sleep_type == 6: #REM
+                    total_rem += current_segment_duration_sec
+                
+            state_dict = dict({'bed_timestamp': bed_timestamp, 'wakeup_timestamp': wakeup_timestamp, 'total_sleep': total_sleep,
+                        'total_awake': total_awake, 'total_sleeping': total_sleeping, 'total_outofbed': total_outofbed,
+                        'total_light_sleep': total_light, 'total_deep_sleep': total_deep, 'total_rem': total_rem})
+            self._state = total_sleep
             self._attributes = state_dict
             self._last_updated = time.time()
+
         else:
-            self._state = ""
+            self._state = 0
             self._attributes = {}
             self._last_updated = time.time()
+
+        # yesterday = datetime.now().replace(hour=17, minute=0, second=0, microsecond=0)
+        # yesterday = yesterday - timedelta(days=1)
+        # starttime = yesterday.isoformat("T") + "Z"
+        # today = datetime.now().replace(hour=11, minute=0, second=0, microsecond=0)
+        # endtime = today.isoformat("T") + "Z"
+        # _LOGGER.debug("Starttime %s, Endtime %s", starttime, endtime)
+        # sleep_dataset = self._client.users().sessions().list(userId='me', fields='session', startTime=starttime,
+        #                                                      endTime=endtime).execute()
+        # starts = []
+        # ends = []
+        # deep_sleep = []
+        # light_sleep = []
+        # _LOGGER.debug("Sleep dataset %s", sleep_dataset)
+        # starttime
+        # for point in sleep_dataset["session"]:
+        #     if int(point["activityType"]) == 72:
+        #         starts.append(int(point["startTimeMillis"]))
+        #         ends.append(int(point["endTimeMillis"]))
+        #         if point["name"].startswith('Deep'):
+        #             deep_sleep_start = datetime.fromtimestamp(int(point["startTimeMillis"]) / 1000)
+        #             deep_sleep_end = datetime.fromtimestamp(int(point["endTimeMillis"]) / 1000)
+        #             _LOGGER.debug("Deep Sleep dataset Total %s", (deep_sleep_end - deep_sleep_start))
+        #             deep_sleep.append(deep_sleep_end - deep_sleep_start)
+        #         elif point["name"].startswith('Light'):
+        #             light_sleep_start = datetime.fromtimestamp(int(point["startTimeMillis"]) / 1000)
+        #             light_sleep_end = datetime.fromtimestamp(int(point["endTimeMillis"]) / 1000)
+        #             _LOGGER.debug("Light Sleep dataset Total %s", (light_sleep_end - light_sleep_start))
+        #             light_sleep.append(light_sleep_end - light_sleep_start)
+        # if len(starts) != 0 or len(ends) != 0:
+        #     bed_time = datetime.fromtimestamp(round(min(starts) / 1000))
+        #     wake_up_time = datetime.fromtimestamp(round(max(ends) / 1000))
+        #     total_sleep = wake_up_time - bed_time
+        #     total_deep_sleep = sum(deep_sleep, timedelta())
+        #     total_light_sleep = sum(light_sleep, timedelta())
+        #     state_dict = dict({'bed_time': str(bed_time), 'wake_up_time': str(wake_up_time), 'sleep': str(total_sleep),
+        #                        'deep_sleep': str(total_deep_sleep), 'light_sleep': str(total_light_sleep)})
+        #     self._state = str(total_sleep)
+        #     self._attributes = state_dict
+        #     self._last_updated = time.time()
+        # else:
+        #     self._state = ""
+        #     self._attributes = {}
+        #     self._last_updated = time.time()
 
 
 class GoogleFitOxygenSensor(GoogleFitSensor):
@@ -778,13 +834,17 @@ class GoogleFitOxygenSensor(GoogleFitSensor):
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        value = 0
+        values = []
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
             if int(point["startTimeNanos"]) > _today_dataset_start():
-                value = point['value'][0]['fpVal']
+                if point['value'][0]['fpVal'] != 0:
+                    values.append(point['value'][0]['fpVal'])
 
         self._last_updated = time.time()
-        self._state = value
+        if sum(values) != 0:
+            self._state = int(round(sum(values) / len(values), 0))
+        else:
+            self._state = 0
         _LOGGER.debug("Oxygen  %s", self._state)
         self._attributes = {}
 
@@ -810,13 +870,16 @@ class GoogleFitBloodPresureSysSensor(GoogleFitSensor):
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        value = 0
+        values = []
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
             if int(point["startTimeNanos"]) > _today_dataset_start():
-                value = point['value'][0]['fpVal']
+                values.append(point['value'][0]['fpVal'])
 
         self._last_updated = time.time()
-        self._state = value
+        if sum(values) != 0:
+            self._state = int(round(sum(values) / len(values), 0))
+        else:
+            self._state = 0
         _LOGGER.debug("Blood pressure SYS  %s", self._state)
         self._attributes = {}
 
@@ -842,13 +905,16 @@ class GoogleFitBloodPresureDiaSensor(GoogleFitSensor):
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        value = 0
+        values = []
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
             if int(point["startTimeNanos"]) > _today_dataset_start():
-                value = point['value'][1]['fpVal']
+                values.append(point['value'][1]['fpVal'])
 
         self._last_updated = time.time()
-        self._state = value
+        if sum(values) != 0:
+            self._state = int(round(sum(values)/len(values), 0))
+        else:
+            self._state = 0
         _LOGGER.debug("Blood pressure DIA  %s", self._state)
         self._attributes = {}
 
@@ -864,23 +930,27 @@ class GoogleFitNutritionSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return NUTRITION
+        return "kcal"
 
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:clock'
+        return 'mdi:nutrition'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
 
+        calories = 0
         state = dict()
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
-            for item in point["value"][0]['mapVal']:
-                state[item["key"]] = state.get(item["key"], 0.0) + item["value"]["fpVal"]
+            for food in point["value"]:
+                for item in food['mapVal']:
+                    state[item["key"]] = state.get(item["key"], 0.0) + item["value"]["fpVal"]
+                    if item["key"] == "calories":
+                        calories += item["value"]["fpVal"]
 
-        self._state = ""
+        self._state = calories
         self._attributes = state
         self._last_updated = time.time()
 
@@ -901,7 +971,7 @@ class GoogleFitHydratationSensor(GoogleFitSensor):
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:water'
+        return 'mdi:cup-water'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -933,7 +1003,7 @@ class GoogleFitBMRSensor(GoogleFitSensor):
     @property
     def icon(self):
         """Return the icon."""
-        return 'mdi:nutrition'
+        return 'mdi:human'
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
