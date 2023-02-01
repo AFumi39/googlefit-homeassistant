@@ -978,7 +978,7 @@ class GoogleFitHydratationSensor(GoogleFitSensor):
     @property
     def unit_of_measurement(self):
         """Returns the unit of measurement."""
-        return "l"
+        return "L"
 
     @property
     def icon(self):
@@ -988,13 +988,14 @@ class GoogleFitHydratationSensor(GoogleFitSensor):
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        values = 0.0
+        hydration = 0.0
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
-            if int(point["startTimeNanos"]) > _today_dataset_start():
-                values += point['value'][0]['fpVal']
+            #Questo if lo commento perchè non ho capito a cosa dovrebbe servire...
+            #if int(point["startTimeNanos"]) > _today_dataset_start():
+                hydration += point['value'][0]['fpVal']
 
         self._last_updated = time.time()
-        self._state = values
+        self._state = hydration
         _LOGGER.debug("Hydratation  %s", self._state)
         self._attributes = {}
 
