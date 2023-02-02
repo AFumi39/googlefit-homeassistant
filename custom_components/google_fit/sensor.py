@@ -32,6 +32,8 @@ DEFAULT_CREDENTIALS_FILE = '.google_fit.credentials.json'
 ICON = 'mdi:heart-pulse'
 MIN_TIME_BETWEEN_SCANS = timedelta(minutes=30)
 MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=30)
+HR_MIN_TIME_BETWEEN_SCANS = timedelta(minutes=5)
+HR_MIN_TIME_BETWEEN_UPDATES = timedelta(minutes=5)
 TOKEN_FILE = '.{}.token'.format(SENSOR)
 SENSOR_NAME = '{} {}'
 
@@ -479,32 +481,16 @@ class GoogleFitHeartRateSensor(GoogleFitSensor):
         """Returns the name suffix of the sensor."""
         return HEARTRATE
 
-    @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
+    @util.Throttle(HR_MIN_TIME_BETWEEN_SCANS, HR_MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        heartrate_datasources = self._get_datasources('com.google.heart_rate.bpm')
+        heartrate_points = self._get_dataset(self.DATA_SOURCE)["point"]
 
         heart_datapoints = {}
-        for datasource in heartrate_datasources:
-            datasource_id = datasource.get('dataStreamId')
-            heart_request = self._client.users().dataSources(). \
-                dataPointChanges().list(
-                userId=API_USER_ID,
-                dataSourceId=datasource_id,
-            )
-            heart_data = heart_request.execute()
-            heart_inserted_datapoints = heart_data.get('insertedDataPoint')
-            for datapoint in heart_inserted_datapoints:
-                point_value = datapoint.get('value')
-                if not point_value:
-                    continue
-                heartrate = point_value[0].get('fpVal')
-                if not heartrate:
-                    continue
-                last_update_milis = int(datapoint.get('modifiedTimeMillis', 0))
-                if not last_update_milis:
-                    continue
-                heart_datapoints[last_update_milis] = heartrate
+        for point in heartrate_points:
+            heartrate = point["value"][0]["fpVal"]
+            last_update_milis = int(point["endTimeNanos"]) / 1000000
+            heart_datapoints[last_update_milis] = heartrate
 
         if heart_datapoints:
             time_updates = list(heart_datapoints.keys())
@@ -536,32 +522,16 @@ class GoogleFitRestingHeartRateSensor(GoogleFitSensor):
         """Returns the name suffix of the sensor."""
         return RESTING_HEARTRATE
 
-    @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
+    @util.Throttle(HR_MIN_TIME_BETWEEN_SCANS, HR_MIN_TIME_BETWEEN_UPDATES)
     def update(self):
         """Extracts the relevant data points for from the Fitness API."""
-        heartrate_datasources = self._get_datasources('com.google.heart_rate.bpm')
+        heartrate_points = self._get_dataset(self.DATA_SOURCE)["point"]
 
         heart_datapoints = {}
-        for datasource in heartrate_datasources:
-            datasource_id = datasource.get('dataStreamId')
-            heart_request = self._client.users().dataSources(). \
-                dataPointChanges().list(
-                userId=API_USER_ID,
-                dataSourceId=datasource_id,
-            )
-            heart_data = heart_request.execute()
-            heart_inserted_datapoints = heart_data.get('insertedDataPoint')
-            for datapoint in heart_inserted_datapoints:
-                point_value = datapoint.get('value')
-                if not point_value:
-                    continue
-                heartrate = point_value[0].get('fpVal')
-                if not heartrate:
-                    continue
-                last_update_milis = int(datapoint.get('modifiedTimeMillis', 0))
-                if not last_update_milis:
-                    continue
-                heart_datapoints[last_update_milis] = heartrate
+        for point in heartrate_points:
+            heartrate = point["value"][0]["fpVal"]
+            last_update_milis = int(point["endTimeNanos"]) / 1000000
+            heart_datapoints[last_update_milis] = heartrate
 
         if heart_datapoints:
             time_updates = list(heart_datapoints.keys())
