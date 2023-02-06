@@ -11,6 +11,13 @@ from homeassistant.helpers import entity
 from homeassistant.helpers.event import track_time_change
 from homeassistant.util.dt import utc_from_timestamp
 
+from homeassistant.component.sensor import (
+    STATE_CLASS_MEASUREMENT,
+    STATE_CLASS_TOTAL,
+    STATE_CLASS_TOTAL_INCREASING,
+    SensorDeviceClass,
+)
+
 REQUIREMENTS = [
     'google-api-python-client==1.6.4',
     'oauth2client==4.0.0',
@@ -341,6 +348,16 @@ class GoogleFitSensor(entity.Entity):
     def unique_id(self) -> str: 
         """Return a unique, Home Assistant friendly identifier for this entity.""" 
         return SENSOR + SENSOR_NAME.format(self._name, self._name_suffix) + self._clientId
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return None
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return None
 
 
 class GoogleFitWeightSensor(GoogleFitSensor):
@@ -358,6 +375,16 @@ class GoogleFitWeightSensor(GoogleFitSensor):
     def _name_suffix(self):
         """Returns the name suffix of the sensor."""
         return WEIGHT
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return SensorDeviceClass.WEIGHT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -419,6 +446,16 @@ class GoogleFitHeightSensor(GoogleFitSensor):
     def _name_suffix(self):
         """Returns the name suffix of the sensor."""
         return HEIGHT
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return SensorDeviceClass.DISTANCE
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -480,6 +517,11 @@ class GoogleFitHeartRateSensor(GoogleFitSensor):
     def _name_suffix(self):
         """Returns the name suffix of the sensor."""
         return HEARTRATE
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(HR_MIN_TIME_BETWEEN_SCANS, HR_MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -521,6 +563,11 @@ class GoogleFitRestingHeartRateSensor(GoogleFitSensor):
     def _name_suffix(self):
         """Returns the name suffix of the sensor."""
         return RESTING_HEARTRATE
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(HR_MIN_TIME_BETWEEN_SCANS, HR_MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -563,6 +610,11 @@ class GoogleFitStepsSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:shoe-print'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -597,6 +649,16 @@ class GoogleFitMoveTimeSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:car-clock'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return SensorDeviceClass.DURATION
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -631,6 +693,11 @@ class GoogleFitCaloriesSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:weight-lifter'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -664,6 +731,16 @@ class GoogleFitDistanceSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:map-marker-distance'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return SensorDeviceClass.DISTANCE
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -698,11 +775,16 @@ class GoogleFitSleepSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:bed-clock'
-
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
     @property
     def device_class(self):
-        """Return the type of sensor."""
-        return "duration"
+         """Return the class of this entity."""
+         return SensorDeviceClass.DURATION
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -812,6 +894,11 @@ class GoogleFitOxygenSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:gas-cylinder'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -848,6 +935,11 @@ class GoogleFitBloodPresureSysSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:water-circle'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -883,6 +975,11 @@ class GoogleFitBloodPresureDiaSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:water-circle'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -918,6 +1015,11 @@ class GoogleFitNutritionSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:nutrition'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -954,6 +1056,16 @@ class GoogleFitHydratationSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:cup-water'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+    
+    @property
+    def device_class(self):
+         """Return the class of this entity."""
+         return SensorDeviceClass.VOLUME
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
@@ -962,7 +1074,7 @@ class GoogleFitHydratationSensor(GoogleFitSensor):
         for point in self._get_dataset(self.DATA_SOURCE)["point"]:
             #Questo if lo commento perchè non ho capito a cosa dovrebbe servire...
             #if int(point["startTimeNanos"]) > _today_dataset_start():
-                hydration += point['value'][0]['fpVal']
+            hydration += point['value'][0]['fpVal']
 
         self._last_updated = time.time()
         self._state = hydration
@@ -987,6 +1099,12 @@ class GoogleFitBMRSensor(GoogleFitSensor):
     def icon(self):
         """Return the icon."""
         return 'mdi:human'
+    
+    @property
+    def state_class(self):
+        """Return the state class of this entity, if any."""
+        return STATE_CLASS_MEASUREMENT
+
 
     @util.Throttle(MIN_TIME_BETWEEN_SCANS, MIN_TIME_BETWEEN_UPDATES)
     def update(self):
