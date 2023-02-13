@@ -11,7 +11,7 @@ from homeassistant.helpers import entity
 from homeassistant.helpers.event import track_time_change
 from homeassistant.util.dt import utc_from_timestamp
 
-from homeassistant.component.sensor import (
+from homeassistant.components.sensor import (
     STATE_CLASS_MEASUREMENT,
     STATE_CLASS_TOTAL,
     STATE_CLASS_TOTAL_INCREASING,
